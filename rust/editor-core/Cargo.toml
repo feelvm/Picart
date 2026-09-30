@@ -1,0 +1,22 @@
+[package]
+name = "picsart-editor-core"
+version = "0.1.0"
+edition = "2021"
+description = "Shared native editing engine: document, layers, GPU effect graph, preview/export, undo, cache, perf"
+license = "MIT"
+
+[lib]
+name = "editor_core"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[features]
+default = []
+# Portable GPU abstraction. Direct Metal/Vulkan backends can replace this
+# where profiling shows a win; the renderer is coded against the trait in gpu.rs.
+wgpu-backend = []
+
+[dev-dependencies]

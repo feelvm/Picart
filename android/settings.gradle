@@ -1,0 +1,6 @@
+// settings.gradle + app module wiring (open `android/` in Android Studio).
+// Rust .so built via cargo-ndk: cargo ndk -t arm64-v8a -o app/src/main/jniLibs build -p picsart-editor-core
+pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+dependencyResolutionManagement { repositories { google(); mavenCentral() } }
+rootProject.name = "PicsartClone"
+include(":app")
