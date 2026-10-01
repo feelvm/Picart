@@ -20,12 +20,12 @@ Render has priority. Decode/encode/export/bg-removal never touch UI or render th
 
 On `onTrimMemory` / memory-warning: drop preview LRU, shrink long-edge to 1024.
 
-## Phase checklist
+## Phase status (honest as of 2026-10-02)
 
-- [x] Phase 1 scaffold: doc model, 1 image layer, texture upload trait, Metal/Vulkan shaders, pan/zoom/rotate uniforms, perf overlay struct
-- [x] Phase 2: brightness/contrast/saturation/exposure/temp/tint/hue/crop/opacity/blend (fused WGSL pass)
-- [x] Phase 3: layers/masks/stickers/text/drawing/order/visibility/undo-redo
-- [x] Phase 4: blur/sharpen/LUT/curves/effect graph + fusion + tiled sources + adaptive preview + LRU
-- [x] Phase 5: bg-removal interface (Core ML / ONNX+NNAPI), async, mask cache, undoable
-- [x] Phase 6: export pipeline (separate from preview, async, quality/scale)
-- [ ] Phase 7: benchmark 12/24/48MP on low/mid/flagship Android + old/recent iPhone; optimize by profile
+- [~] Phase 1 — partial: document model ✓ (tested); pan/zoom/rotate = uniform math only, no gesture wiring; texture upload = trait + NullBackend only; Metal/Vulkan shader files exist but are not compiled/loaded; perf overlay = struct, not wired to a display link
+- [~] Phase 2 — partial: ColorAdjust params + fused WGSL pass (now with vertex stage) on disk; no GPU pipeline executes it yet
+- [~] Phase 3 — partial: layer/mask/text/drawing data models ✓; undo covers params, masks, crop, layer removal ✓ (tested); no GPU compositing
+- [~] Phase 4 — partial: graph fusion planner ✓ (tested); LRU implemented but unused; tiling = metadata only, no decode
+- [ ] Phase 5 — interface + NullSegmenter stub only (no Core ML / ONNX)
+- [ ] Phase 6 — export request validation only (no rendering/encoding)
+- [ ] Phase 7 — not started

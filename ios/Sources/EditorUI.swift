@@ -63,15 +63,31 @@ public final class EditorModel: ObservableObject {
     @Published var perfText = "FPS: --"
     @Published var brightness: Double = 0
     private var gestureId: String?
-    func pinch(_ m: CGFloat) { /* build transform JSON → setTransform(layer, gesture) */ }
+    /// Layer receiving filter edits; set by importImage. Never hardcoded.
+    private var layerId: UInt64?
+
+    /// Adds the image and remembers its layer for subsequent edits.
+    @discardableResult
+    public func importImage(uri: String, width: UInt32, height: UInt32, format: String) -> UInt64? {
+        do {
+            _ = try engine.createDocument(w: width, h: height)
+            let layer = try engine.addImage(ImageSpec(uri: uri, width: width, height: height, format: format))
+            layerId = layer
+            return layer
+        } catch { return nil }
+    }
+
+    func pinch(_ m: CGFloat) { /* build transform → setTransform(layer, gesture) */ }
     func pan(_ t: CGSize) {}
+
     func brightnessChanged(_ v: Double, ended: Bool) {
+        guard let layer = layerId else { return }
         if gestureId == nil { gestureId = UUID().uuidString }
-        let json = "{\"brightness\":\(v),\"contrast\":1.0,\"saturation\":1.0,\"exposure\":0.0,\"temperature\":0.0,\"tint\":0.0,\"hue_shift\":0.0,\"sharpen\":0.0,\"blur_radius\":0.0,\"vignette\":0.0,\"grain\":0.0}"
-        _ = try? engine.setFilter(layer: model_layer(), colorJson: json, gesture: gestureId)
+        var color = ColorAdjust()
+        color.brightness = Float(v)
+        _ = try? engine.setFilter(layer: layer, color: color, gesture: gestureId)
         if ended { engine.endGesture(); gestureId = nil }
     }
-    private func model_layer() -> UInt64 { 1 }
 }
 
 struct BottomToolbar: View {
@@ -79,7 +95,9 @@ struct BottomToolbar: View {
     var body: some View {
         VStack {
             Slider(value: $model.brightness, in: -1...1) { Text("Brightness") }
-                .onChange(of: model.brightness) { model.brightnessChanged($0, ended: false) }
+                .onChange(of: model.brightness) { _, newValue in
+                    model.brightnessChanged(newValue, ended: false)
+                }
             HStack {
                 Button("Undo") { _ = try? model.engine.undo() }
                 Button("Redo") { _ = try? model.engine.redo() }

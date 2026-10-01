@@ -83,6 +83,10 @@ fn before_of(op: &ParamOp) -> ParamOp {
         SetTransform { layer, before, .. } => SetTransform { layer, before: before.clone(), after: before },
         SetOpacity { layer, before, .. } => SetOpacity { layer, before, after: before },
         SetBlend { layer, before, .. } => SetBlend { layer, before: before.clone(), after: before },
+        SetMask { layer, before, .. } => SetMask { layer, before: before.clone(), after: before },
+        SetCrop { layer, before, .. } => SetCrop { layer, before: before.clone(), after: before },
+        // Undoing a removal restores the layer at its recorded index.
+        RemoveLayer { index, layer, .. } => RemoveLayer { index, layer, present: true },
         SetVisible { layer, before, .. } => SetVisible { layer, before, after: before },
         MoveLayer { before, .. } => MoveLayer { before: before.clone(), after: before },
     }

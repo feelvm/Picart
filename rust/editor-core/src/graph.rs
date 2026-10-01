@@ -25,10 +25,12 @@ pub struct RenderPlan {
 }
 
 impl EffectGraph {
-    pub fn from_layers(layers: &[crate::layer::Layer]) -> Self {
+    /// Borrows layers — hot path builds a graph per frame without cloning
+    /// the layer list. Only `ColorAdjust` is cloned into `Effect::Color` nodes.
+    pub fn from_layers<'a>(layers: impl IntoIterator<Item = &'a crate::layer::Layer>) -> Self {
         let mut g = Self::default();
         let mut id = 0u32;
-        for l in layers.iter().filter(|l| l.visible) {
+        for l in layers.into_iter().filter(|l| l.visible) {
             if !l.color.is_identity() {
                 g.nodes.push(EffectNode { id, layer: l.id, effect: Effect::Color(l.color.clone()), inputs: vec![] });
                 id += 1;

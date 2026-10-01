@@ -15,9 +15,9 @@ float3 blend_one(float3 dst, float3 src, uint mode) {
     case 1: return dst * src;                                  // multiply
     case 2: return 1.0 - (1.0 - dst) * (1.0 - src);            // screen
     case 3: return mix(2.0*dst*src, 1.0-2.0*(1.0-dst)*(1.0-src), step(0.5, dst)); // overlay
-    case 4: return mix(dst, (dst < 0.5)
+    case 4: return (dst < 0.5)
         ? (2.0*dst*src + dst*dst*(1.0-2.0*src))
-        : (sqrt(dst)*(2.0*src-1.0) + 2.0*dst*(1.0-src)), 1.0); // soft light approx
+        : (sqrt(dst)*(2.0*src-1.0) + 2.0*dst*(1.0-src)); // soft light approx
     case 5: return (src < 0.5) ? (2.0*dst*src) : (1.0-2.0*(1.0-dst)*(1.0-src));   // hard light
     case 6: return min(dst, src);                               // darken
     case 7: return max(dst, src);                               // lighten

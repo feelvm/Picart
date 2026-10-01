@@ -24,6 +24,27 @@ fn hue_shift_rgb(c: vec3<f32>, a: f32) -> vec3<f32> {
   return c * cos_a + cross(k, c) * sin_a + k * dot(k, c) * (1.0 - cos_a);
 }
 
+struct VSOut {
+  @builtin(position) pos: vec4<f32>,
+  @location(0) uv: vec2<f32>,
+  @location(1) mask_uv: vec2<f32>,
+};
+
+// Fullscreen triangle: no vertex buffer needed, 3 verts cover clip space.
+@vertex
+fn vs_main(@builtin(vertex_index) vi: u32) -> VSOut {
+  let xy = array<vec2<f32>, 3>(
+    vec2<f32>(-1.0, -1.0), vec2<f32>(3.0, -1.0), vec2<f32>(-1.0, 3.0));
+  let p = xy[vi];
+  var out: VSOut;
+  out.pos = vec4<f32>(p, 0.0, 1.0);
+  // Clip → texture uv. Texture v=0 is the top row; clip y=+1 is the top of
+  // the screen, so flip y to keep images upright.
+  out.uv = vec2<f32>((p.x + 1.0) * 0.5, (1.0 - p.y) * 0.5);
+  out.mask_uv = out.uv;
+  return out;
+}
+
 @fragment
 fn fs_main(@location(0) uv: vec2<f32>, @location(1) mask_uv: vec2<f32>) -> @location(0) vec4<f32> {
   var c: vec4<f32> = textureSample(src, samp, uv);

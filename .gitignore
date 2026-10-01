@@ -1,0 +1,26 @@
+# Rust
+/target/
+**/*.rs.bk
+
+# macOS
+.DS_Store
+
+# Xcode
+build/
+DerivedData/
+xcuserdata/
+*.xcuserstate
+*.ipa
+
+# Android
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+*.jks
+*.keystore
+
+# Editor
+.idea/
+.vscode/

@@ -40,9 +40,8 @@ impl Document {
     }
 
     pub fn add_text(&mut self, style: TextStyle, transform: Transform) -> LayerId {
-        let mut l = Layer { id: Layer::next_id(), kind: crate::layer::LayerKind::Text(style), transform, opacity: 1.0, blend: BlendMode::Normal, visible: true, crop: None, mask: None, color: ColorAdjust::default() };
+        let l = Layer { id: Layer::next_id(), kind: crate::layer::LayerKind::Text(style), transform, opacity: 1.0, blend: BlendMode::Normal, visible: true, crop: None, mask: None, color: ColorAdjust::default() };
         let id = l.id;
-        l.transform = transform;
         self.layers.push(l);
         id
     }
@@ -63,7 +62,8 @@ impl Document {
 
     pub fn remove_layer(&mut self, id: LayerId) -> bool {
         if let Some(i) = self.layers.iter().position(|l| l.id == id) {
-            self.layers.remove(i);
+            let l = self.layers.remove(i);
+            self.history.push("remove_layer", None, ParamOp::RemoveLayer { index: i, layer: l, present: false });
             true
         } else { false }
     }
@@ -134,8 +134,18 @@ impl Document {
         }
     }
 
+    /// Setting a mask is undoable (spec: AI/brush masks must be removable).
     pub fn set_mask(&mut self, id: LayerId, mask: Option<LayerMask>) {
-        if let Some(l) = self.layer_mut(id) { l.mask = mask; }
+        let (before, after) = match self.layer_mut(id) {
+            Some(l) => {
+                if l.mask == mask { return; }
+                let before = l.mask.clone();
+                l.mask = mask.clone();
+                (before, mask)
+            }
+            None => return,
+        };
+        self.history.push("mask", None, ParamOp::SetMask { layer: id, before, after });
     }
 
     pub fn set_visible(&mut self, id: LayerId, visible: bool) {
@@ -146,8 +156,18 @@ impl Document {
         }
     }
 
+    /// Setting a crop is undoable.
     pub fn set_crop(&mut self, id: LayerId, crop: Option<crate::layer::CropRect>) {
-        if let Some(l) = self.layer_mut(id) { l.crop = crop; }
+        let (before, after) = match self.layer_mut(id) {
+            Some(l) => {
+                if l.crop == crop { return; }
+                let before = l.crop.clone();
+                l.crop = crop.clone();
+                (before, crop)
+            }
+            None => return,
+        };
+        self.history.push("crop", None, ParamOp::SetCrop { layer: id, before, after });
     }
 
     pub fn push_stroke(&mut self, id: LayerId, stroke: Stroke) -> bool {
@@ -179,7 +199,17 @@ impl Document {
             ParamOp::SetOpacity { layer, after, .. } => { if let Some(l) = self.layer_mut(layer) { l.opacity = after; } }
             ParamOp::SetBlend { layer, after, .. } => { if let Some(l) = self.layer_mut(layer) { l.blend = after; } }
             ParamOp::SetColor { layer, after, .. } => { if let Some(l) = self.layer_mut(layer) { l.color = after; } }
+            ParamOp::SetMask { layer, after, .. } => { if let Some(l) = self.layer_mut(layer) { l.mask = after; } }
+            ParamOp::SetCrop { layer, after, .. } => { if let Some(l) = self.layer_mut(layer) { l.crop = after; } }
             ParamOp::SetVisible { layer, after, .. } => { if let Some(l) = self.layer_mut(layer) { l.visible = after; } }
+            ParamOp::RemoveLayer { index, layer, present } => {
+                if present {
+                    let i = index.min(self.layers.len());
+                    self.layers.insert(i, layer);
+                } else {
+                    self.layers.retain(|l| l.id != layer.id);
+                }
+            }
             ParamOp::MoveLayer { after, .. } => {
                 let mut next = vec![];
                 for id in after {
@@ -209,8 +239,7 @@ impl Document {
     }
 
     pub fn render_export_plan(&self) -> crate::graph::RenderPlan {
-        let layers: Vec<Layer> = self.layers_in_order().into_iter().cloned().collect();
-        crate::graph::EffectGraph::from_layers(&layers).plan()
+        crate::graph::EffectGraph::from_layers(self.layers.iter()).plan()
     }
 }
 
@@ -236,5 +265,48 @@ mod tests {
         let json = d.save_document().unwrap();
         let d2 = Document::load_document(&json).unwrap();
         assert_eq!(d2.layer_count(), 1);
+    }
+
+    #[test]
+    fn mask_undo_redo() {
+        let mut d = Document::new(100, 100);
+        let id = d.add_text(TextStyle::default(), Transform::default());
+        assert!(d.layer(id).unwrap().mask.is_none());
+        d.set_mask(id, Some(LayerMask::new("ai-mask-1")));
+        assert_eq!(d.layer(id).unwrap().mask.as_ref().unwrap().texture_key, "ai-mask-1");
+        assert!(d.undo());
+        assert!(d.layer(id).unwrap().mask.is_none(), "undo must remove the mask");
+        assert!(d.redo());
+        assert!(d.layer(id).unwrap().mask.is_some(), "redo must restore the mask");
+    }
+
+    #[test]
+    fn crop_undo_redo() {
+        let mut d = Document::new(100, 100);
+        let id = d.add_image(ImageSource { asset_id: 1, uri: "a.jpg".into(), width: 100, height: 100, format: crate::image_source::ImageFormat::Jpeg, tile_px: 512 });
+        let crop = crate::layer::CropRect { x: 0.1, y: 0.1, w: 0.5, h: 0.5 };
+        d.set_crop(id, Some(crop));
+        assert!(d.layer(id).unwrap().crop.is_some());
+        assert!(d.undo());
+        assert!(d.layer(id).unwrap().crop.is_none(), "undo must clear the crop");
+        assert!(d.redo());
+        assert!(d.layer(id).unwrap().crop.is_some());
+    }
+
+    #[test]
+    fn remove_layer_undo_redo() {
+        let mut d = Document::new(100, 100);
+        let a = d.add_text(TextStyle::default(), Transform::default());
+        let b = d.add_text(TextStyle::default(), Transform::default());
+        assert!(d.remove_layer(a));
+        assert!(d.layer(a).is_none());
+        assert_eq!(d.layer_count(), 1);
+        assert!(d.undo());
+        assert!(d.layer(a).is_some(), "undo must restore the removed layer");
+        // Restored at its original index (0), before the surviving layer.
+        assert_eq!(d.layer_order(), vec![a, b]);
+        assert!(d.redo());
+        assert!(d.layer(a).is_none(), "redo must remove it again");
+        assert_eq!(d.layer_order(), vec![b]);
     }
 }

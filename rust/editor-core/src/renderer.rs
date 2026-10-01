@@ -27,8 +27,7 @@ impl Renderer {
         params: &FrameParams,
         gpu: &mut dyn GpuBackend,
     ) -> Vec<RenderCommand> {
-        let layers: Vec<_> = doc.layers_in_order().into_iter().cloned().collect();
-        let graph = EffectGraph::from_layers(&layers);
+        let graph = EffectGraph::from_layers(doc.layers_in_order());
         let plan = graph.plan();
         self.last_pass_count = plan.pass_count.max(1);
         let mut cmds = Vec::new();

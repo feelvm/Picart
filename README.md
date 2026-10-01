@@ -32,10 +32,11 @@ docs/                  architecture, threading, performance budgets
 # Rust core (host check; on-device uses cargo-ndk / xcode cargo-lipo equivalent)
 cargo check -p picsart-editor-core
 cargo test -p picsart-editor-core
-
-# iOS: open ios/PicsartClone.xcodeproj (add Rust staticlib via build script)
-# Android: open android/ in Android Studio (cargo-ndk builds libeditor_core.so)
 ```
+
+iOS/Android shells are scaffolds, not buildable apps yet (see
+`docs/ARCHITECTURE.md` for honest phase status). The iOS app project
+(Xcode project + Rust staticlib wiring) is the next milestone.
 
 ## Performance contract
 

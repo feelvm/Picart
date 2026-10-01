@@ -76,12 +76,19 @@ impl Effect {
 }
 
 /// Command deltas for coalesced undo (never full image copies).
+///
+/// `RemoveLayer` stores the removed layer's *params* (not pixels) so undo can
+/// reinsert it; `present` describes the state the op applies: `false` = the
+/// layer is absent (redo), `true` = restored at `index` (undo).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ParamOp {
     SetTransform { layer: LayerId, before: Transform, after: Transform },
     SetOpacity { layer: LayerId, before: f32, after: f32 },
     SetBlend { layer: LayerId, before: crate::layer::BlendMode, after: crate::layer::BlendMode },
     SetColor { layer: LayerId, before: ColorAdjust, after: ColorAdjust },
+    SetMask { layer: LayerId, before: Option<crate::mask::LayerMask>, after: Option<crate::mask::LayerMask> },
+    SetCrop { layer: LayerId, before: Option<crate::layer::CropRect>, after: Option<crate::layer::CropRect> },
+    RemoveLayer { index: usize, layer: crate::layer::Layer, present: bool },
     MoveLayer { before: Vec<LayerId>, after: Vec<LayerId> },
     SetVisible { layer: LayerId, before: bool, after: bool },
 }

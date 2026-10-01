@@ -24,15 +24,8 @@ impl Transform {
     pub fn to_mat3(&self) -> [f32; 9] {
         let (s, c) = self.rotation_rad.sin_cos();
         let (sx, sy) = (self.scale[0], self.scale[1]);
-        let (tx, ty) = (self.translate[0], self.translate[1]);
+        let [tx, ty] = self.translate;
         // R*S then translation in last column
         [c * sx, -s * sy, tx, s * sx, c * sy, ty, 0.0, 0.0, 1.0]
-    }
-
-    /// True when pinch/zoom/rotate gestures can take the fast path
-    /// (no re-decode, just a uniform update + re-composite).
-    pub fn is_fast_path(&self, prev: &Self) -> bool {
-        (self.scale[0] - prev.scale[0]).abs() < 4.0
-            && (self.scale[1] - prev.scale[1]).abs() < 4.0
     }
 }
