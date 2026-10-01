@@ -3,7 +3,12 @@ import Foundation
 // MARK: - Rust FFI bridge (controller → engine, no pixel copies on hot path)
 //
 // Build: cargo build -p picsart-editor-core --release --target aarch64-apple-ios
-// Link libeditor_core.a + add this module. All calls enqueue GPU work and return.
+// Link libeditor_core.a (wired by ios/build-rust.sh in the Xcode build phase).
+//
+// Two call classes:
+// * State mutations (create/add/set/undo) — JSON payloads, mutate engine state.
+// * Frame-plan reads (beginFrame/pass*) — flat floats+ids, called every frame
+//   by the Metal encoder. No pixel buffers and no per-frame JSON cross here.
 
 @_silgen_name("ec_create_document") func ec_create_document(_ w: UInt32, _ h: UInt32) -> UnsafeMutablePointer<CChar>?
 @_silgen_name("ec_use_document") func ec_use_document(_ doc: UInt64) -> UnsafeMutablePointer<CChar>?
@@ -16,10 +21,18 @@ import Foundation
 @_silgen_name("ec_undo") func ec_undo() -> UnsafeMutablePointer<CChar>?
 @_silgen_name("ec_redo") func ec_redo() -> UnsafeMutablePointer<CChar>?
 @_silgen_name("ec_end_gesture") func ec_end_gesture()
-@_silgen_name("ec_render_preview") func ec_render_preview(_ w: UInt32, _ h: UInt32, _ interacting: Bool) -> UnsafeMutablePointer<CChar>?
-@_silgen_name("ec_save_document") func ec_save_document() -> UnsafeMutablePointer<CChar>?
-@_silgen_name("ec_load_document") func ec_load_document(_ json: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>?
 @_silgen_name("ec_free_string") func ec_free_string(_ p: UnsafeMutablePointer<CChar>?)
+
+// Frame plan (flat ABI — see editor-core/src/ffi.rs)
+@_silgen_name("ec_begin_frame") func ec_begin_frame(_ w: UInt32, _ h: UInt32) -> UInt32
+@_silgen_name("ec_pass_kind") func ec_pass_kind(_ index: UInt32) -> UInt32
+@_silgen_name("ec_pass_texture") func ec_pass_texture(_ index: UInt32) -> UInt64
+@_silgen_name("ec_pass_uniforms") func ec_pass_uniforms(_ index: UInt32, _ out: UnsafeMutablePointer<Float>, _ len: UInt32)
+@_silgen_name("ec_clear_rgba") func ec_clear_rgba(_ out: UnsafeMutablePointer<Float>)
+
+// Performance instrumentation
+@_silgen_name("ec_perf_frame") func ec_perf_frame(_ gpuMs: Float, _ cpuMs: Float, _ passes: UInt32)
+@_silgen_name("ec_perf_text") func ec_perf_text() -> UnsafeMutablePointer<CChar>?
 
 public enum EngineError: Error { case engine(String) }
 
@@ -84,6 +97,14 @@ public struct ImageSpec: Encodable {
     }
 }
 
+public struct AddImageResult: Decodable {
+    public let layerId: UInt64
+    public let assetId: UInt64
+    enum CodingKeys: String, CodingKey {
+        case layerId = "layer_id", assetId = "asset_id"
+    }
+}
+
 func encodeJSON<T: Encodable>(_ v: T) throws -> String {
     let data = try JSONEncoder().encode(v)
     guard let s = String(data: data, encoding: .utf8) else { throw EngineError.engine("utf8") }
@@ -93,6 +114,8 @@ func encodeJSON<T: Encodable>(_ v: T) throws -> String {
 /// Thin controller over the Rust engine. Owns no pixels.
 public final class EditorEngine {
     public init() {}
+
+    // -- lifecycle --
 
     @discardableResult
     public func createDocument(w: UInt32, h: UInt32) throws -> UInt64 {
@@ -104,16 +127,15 @@ public final class EditorEngine {
 
     public func useDocument(_ id: UInt64) throws { _ = try takeString(ec_use_document(id)) }
 
-    /// Returns the new layer id. Encodes via JSONEncoder — URIs with quotes or
-    /// backslashes stay valid JSON (no string interpolation into the payload).
+    /// Encodes via JSONEncoder — URIs with quotes/backslashes stay valid JSON.
     @discardableResult
-    public func addImage(_ spec: ImageSpec) throws -> UInt64 {
-        // {"layer_id":N}
-        struct Resp: Decodable { let layer_id: UInt64 }
+    public func addImage(_ spec: ImageSpec) throws -> AddImageResult {
         let json = try encodeJSON(spec)
         let out = try json.withCString { takeString(ec_add_image($0)) }
-        return try JSONDecoder().decode(Resp.self, from: Data(out.utf8)).layer_id
+        return try JSONDecoder().decode(AddImageResult.self, from: Data(out.utf8))
     }
+
+    // -- edits --
 
     @discardableResult
     public func setFilter(layer: UInt64, color: ColorAdjust, gesture: String?) throws -> String {
@@ -137,11 +159,32 @@ public final class EditorEngine {
     }
 
     public func endGesture() { ec_end_gesture() }
-    public func undo() throws -> String { try takeString(ec_undo()) }
-    public func redo() throws -> String { try takeString(ec_redo()) }
+    @discardableResult public func undo() throws -> String { try takeString(ec_undo()) }
+    @discardableResult public func redo() throws -> String { try takeString(ec_redo()) }
 
-    /// Returns render-plan JSON → Metal command encoder. No pixel readback.
-    public func renderPreview(viewportW: UInt32, viewportH: UInt32, interacting: Bool) throws -> String {
-        try takeString(ec_render_preview(viewportW, viewportH, interacting))
+    // -- frame plan (called every frame by MetalRenderer) --
+
+    public func beginFrame(viewportW: UInt32, viewportH: UInt32) -> Int {
+        Int(ec_begin_frame(viewportW, viewportH))
     }
+    public func passKind(_ index: Int) -> UInt32 { ec_pass_kind(UInt32(index)) }
+    public func passTexture(_ index: Int) -> UInt64 { ec_pass_texture(UInt32(index)) }
+    /// 28 packed floats (112 bytes) — layout in editor-core/src/uniforms.rs.
+    public func passUniforms(_ index: Int) -> [Float] {
+        var out = [Float](repeating: 0, count: 28)
+        ec_pass_uniforms(UInt32(index), &out, UInt32(out.count))
+        return out
+    }
+    public func clearRgba() -> [Float] {
+        var out = [Float](repeating: 0, count: 4)
+        ec_clear_rgba(&out)
+        return out
+    }
+
+    // -- performance --
+
+    public func perfFrame(gpuMs: Float, cpuMs: Float, passes: Int) {
+        ec_perf_frame(gpuMs, cpuMs, UInt32(passes))
+    }
+    public func perfText() -> String? { try? takeString(ec_perf_text()) }
 }

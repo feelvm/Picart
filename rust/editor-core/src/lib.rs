@@ -4,17 +4,17 @@
 //! preview/export orchestration and perf counters. Native UI (Swift/Kotlin)
 //! is a thin controller that calls into this crate via [`ffi`].
 //!
-//! GPU rule: image data stays on the GPU. [`renderer`] only emits render
-//! passes / fused shader params; [`gpu`] abstracts Metal/Vulkan/wgpu.
+//! GPU rule: the engine never touches pixels. It emits *frame plans* — typed
+//! pass lists with packed uniform floats ([`renderer`], [`uniforms`]) — and
+//! the platform's native GPU API (Metal on iOS, Vulkan on Android) encodes
+//! and executes them. Shader sources live in `ios/Sources/Shaders` (MSL).
 
 pub mod bg_remove;
 pub mod cache;
 pub mod document;
 pub mod drawing;
 pub mod effects;
-pub mod export;
 pub mod ffi;
-pub mod gpu;
 pub mod graph;
 pub mod history;
 pub mod image_source;
@@ -26,6 +26,7 @@ pub mod renderer;
 pub mod text;
 pub mod threading;
 pub mod transform;
+pub mod uniforms;
 
 pub use document::{Document, DocumentId};
 pub use effects::{ColorAdjust, Effect};

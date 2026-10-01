@@ -1,0 +1,35 @@
+# XcodeGen project definition — regenerate with `xcodegen` (see README).
+# The app target links the Rust staticlib built by build-rust.sh at build time.
+name: PicsartClone
+options:
+  bundleIdPrefix: com.picsartclone
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    TARGETED_DEVICE_FAMILY: "1"   # iPhone
+targets:
+  PicsartClone:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.picsartclone.app
+        LIBRARY_SEARCH_PATHS: "$(SRCROOT)/build"
+        OTHER_LDFLAGS: "-force_load $(SRCROOT)/build/libeditor_core.a"
+    preBuildScripts:
+      - name: Build Rust staticlib
+        # `sh` prefix: git checkouts on Windows can't carry the +x bit.
+        script: 'sh "$SRCROOT/build-rust.sh"'
+        basedOnDependencyAnalysis: false
+    info:
+      path: Support/Info.plist
+      properties:
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        CFBundleDisplayName: PicsartClone

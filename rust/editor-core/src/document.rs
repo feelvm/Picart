@@ -229,14 +229,8 @@ impl Document {
     }
 
     // -- render entry points ------------------------------------------------------
-    pub fn render_preview(
-        &self,
-        renderer: &mut crate::renderer::Renderer,
-        params: &crate::renderer::FrameParams,
-        gpu: &mut dyn crate::gpu::GpuBackend,
-    ) -> Vec<crate::gpu::RenderCommand> {
-        renderer.render_frame(self, params, gpu)
-    }
+    // Frame plans are built by `crate::renderer::Renderer::build_frame_plan`;
+    // the native side encodes them. Export planning stays here for callers.
 
     pub fn render_export_plan(&self) -> crate::graph::RenderPlan {
         crate::graph::EffectGraph::from_layers(self.layers.iter()).plan()

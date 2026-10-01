@@ -1,2 +1,4 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+# Force LF for shell scripts the Mac executes (CRLF breaks /bin/sh)
+*.sh text eol=lf

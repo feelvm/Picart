@@ -30,7 +30,7 @@ impl Default for ColorAdjust {
 
 impl ColorAdjust {
     /// All color-grade ops that can fuse into ONE fragment pass (see
-    /// shaders/color_grade.wgsl). Blur/sharpen may force extra passes.
+    /// ios/Sources/Shaders/ColorGrade.metal). Blur/sharpen may force extra passes.
     pub fn fusable(&self) -> bool {
         self.blur_radius <= 0.0 && self.sharpen <= 0.001
     }
